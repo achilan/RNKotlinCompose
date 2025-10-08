@@ -62,22 +62,42 @@ data class UpdateUserRequest(
 )
 
 
-internal class BearerInterceptor(private val tokenProvider: () -> String) : Interceptor {
+internal class BearerInterceptor(
+    private val tokenProvider: () -> String,
+    private val tokenRefresher: (() -> String?)? = null
+) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val token = tokenProvider()
-        val request = chain.request().newBuilder()
+        var token = tokenProvider()
+        var request = chain.request().newBuilder()
             .addHeader("Authorization", "Bearer $token")
             .build()
-        return chain.proceed(request)
+
+        val response = chain.proceed(request)
+        if (response.code == 401) {
+            response.close()
+            val newToken = try {
+                tokenRefresher?.invoke()
+            } catch (t: Throwable) {
+                null
+            }
+            if (!newToken.isNullOrBlank()) {
+                val retryReq = chain.request().newBuilder()
+                    .removeHeader("Authorization")
+                    .addHeader("Authorization", "Bearer $newToken")
+                    .build()
+                return chain.proceed(retryReq)
+            }
+        }
+        return response
     }
 }
 
 internal object ApiClientFactory {
-    fun create(baseUrl: String, tokenProvider: () -> String): GoRestApi {
+    fun create(baseUrl: String, tokenProvider: () -> String, tokenRefresher: (() -> String?)? = null): GoRestApi {
         val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
         val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
         val client = OkHttpClient.Builder()
-            .addInterceptor(BearerInterceptor(tokenProvider))
+            .addInterceptor(BearerInterceptor(tokenProvider, tokenRefresher))
             .addInterceptor(logging)
             .build()
         return Retrofit.Builder()

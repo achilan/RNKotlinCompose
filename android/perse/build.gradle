@@ -20,6 +20,7 @@ android {
         }
         def gorestToken = localProps.getProperty('GOREST_TOKEN', System.getenv('GOREST_TOKEN') ?: '')
         buildConfigField 'String', 'GOREST_TOKEN', '"' + gorestToken.replace('"','\\"') + '"'
+        buildConfigField 'String', 'TOKEN_ROTATE_URL', '""'
     }
 
     buildTypes {
@@ -59,4 +60,6 @@ dependencies {
     implementation 'com.squareup.moshi:moshi-kotlin:1.15.2'
 
     compileOnly("com.facebook.react:react-android")
+    // Secure storage for tokens
+    implementation 'androidx.security:security-crypto:1.1.0-alpha03'
 }

@@ -5,6 +5,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.ComposeView
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.Callback
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.rnkotlincompose.perse.security.TokenRotator
+import android.widget.Toast
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -17,6 +23,7 @@ import com.rnkotlincompose.core.UsersRepository
 import com.rnkotlincompose.perse.ui.UsersScreen
 import com.rnkotlincompose.perse.data.ApiClientFactory
 import com.rnkotlincompose.perse.data.UsersRepositoryImpl
+import com.rnkotlincompose.perse.security.TokenStore
 
 class PerseModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
     override fun getName() = "PerseModule"
@@ -24,6 +31,36 @@ class PerseModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
     @ReactMethod
     fun getVersion(callback: Callback) {
         callback.invoke("1.0")
+    }
+
+    @ReactMethod
+    fun setToken(token: String, callback: Callback) {
+        try {
+            TokenStore.saveToken(reactApplicationContext, token)
+            callback.invoke(null, "ok")
+        } catch (t: Throwable) {
+            callback.invoke(t.message ?: "error")
+        }
+    }
+
+    @ReactMethod
+    fun rotateToken(callback: Callback) {
+        val rotateUrl = BuildConfig.TOKEN_ROTATE_URL
+        if (rotateUrl.isBlank()) {
+            callback.invoke("rotate_url_empty")
+            return
+        }
+        val current = TokenStore.getToken(reactApplicationContext)
+        CoroutineScope(Dispatchers.IO).launch {
+            val res = TokenRotator.rotate(reactApplicationContext, rotateUrl, current)
+            withContext(Dispatchers.Main) {
+                res.fold(onSuccess = { newToken ->
+                    callback.invoke(null, newToken)
+                }, onFailure = { err ->
+                    callback.invoke(err.message ?: "rotate_error")
+                })
+            }
+        }
     }
 }
 class PerseViewManager : SimpleViewManager<View>() {
@@ -35,10 +72,20 @@ class PerseViewManager : SimpleViewManager<View>() {
                 MaterialTheme {
                     UsersScreen(
                         repositoryFactory = {
-                            val tokenProvider = {
-                                BuildConfig.GOREST_TOKEN
+                            val initialToken = BuildConfig.GOREST_TOKEN
+                            if (initialToken.isNotBlank()) {
+                                TokenStore.saveToken(this.context, initialToken)
                             }
-                            val api = ApiClientFactory.create(BuildConfig.API_BASE_URL, tokenProvider)
+
+                            val tokenProvider = {
+                                TokenStore.getToken(this.context)
+                            }
+                            val tokenRefresher = {
+                                try {
+                                    TokenRotator.rotateBlocking(this.context, BuildConfig.TOKEN_ROTATE_URL, TokenStore.getToken(this.context))
+                                } catch (t: Throwable) { null }
+                            }
+                            val api = ApiClientFactory.create(BuildConfig.API_BASE_URL, tokenProvider, tokenRefresher)
                             UsersRepositoryImpl(api)
                         }
                     )
