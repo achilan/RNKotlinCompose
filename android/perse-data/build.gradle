@@ -1,0 +1,40 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.rnkotlincompose.perse.data'
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        minSdk rootProject.ext.minSdkVersion
+        targetSdk rootProject.ext.targetSdkVersion
+        consumerProguardFiles 'consumer-rules.pro'
+        buildConfigField 'String', 'API_BASE_URL', '"https://gorest.co.in/public/v2/"'
+        def localProps = new Properties()
+        def lpFile = project.rootProject.file('local.properties')
+        if (lpFile.exists()) { localProps.load(new FileInputStream(lpFile)) }
+        def gorestToken = localProps.getProperty('GOREST_TOKEN', System.getenv('GOREST_TOKEN') ?: '')
+        buildConfigField 'String', 'GOREST_TOKEN', '"' + gorestToken.replace('"','\\"') + '"'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug { minifyEnabled false }
+    }
+}
+
+dependencies {
+    implementation project(':core')
+
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
+    implementation 'com.squareup.retrofit2:retrofit:2.11.0'
+    implementation 'com.squareup.retrofit2:converter-moshi:2.11.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
+    implementation 'com.squareup.moshi:moshi-kotlin:1.15.2'
+}
