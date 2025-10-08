@@ -26,6 +26,7 @@ Separación: JS nunca maneja el token; todo el networking se ejecuta en Kotlin.
 ```
 GOREST_TOKEN=tu_token
 ```
+Puedes obtener el go rest token aquí https://gorest.co.in/
 
 2) En CI puedes definir `GOREST_TOKEN` como variable de entorno (lo recoge el BuildConfig si no hay local.properties).
 
